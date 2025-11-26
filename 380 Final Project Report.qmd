@@ -1,0 +1,436 @@
+---
+title: "380 Final Project Report"
+author: "Siyona Behera, Mitchell Darling, Shania King, and Sree Penumuchu"
+format: 
+  pdf:
+    toc: false
+    code-fold: true
+    code-link: true
+    number-sections: true
+    number-depth: 5
+    fig-align: center
+    cap-location: top
+    geometry: 
+      - top = 1in
+      - left = 1in
+      - right = 1in
+      - bottom = 1in
+    colorlinks: true
+    fig-width: 8
+    fig-height: 5
+    fig-dpi: 300
+execute: 
+  echo: false
+  eval: true
+  output: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+*Shark Tank,* the popular entrepreneurial reality TV show, provides a unique public dataset of business pitches and investment outcomes. For aspiring entrepreneurs and investors alike, understanding the factors that lead to a successful deal is of significant interest. This project aims to leverage data from the show to build predictive models for deal success, focusing on two distinct questions.
+
+Our primary research question is: **Can we predict whether a pitch will receive a deal or not using other variables in the dataset?** To answer this, we employ a **Random Forest model,** an ensemble method covered in class, to establish a robust baseline and identify key predictors from the full set of features.
+
+We will also investigate a more specific, strategic question: **How likely are the contestants to get a deal based on the original equity offered to the sharks?** To model this complex, potentially non-linear relationship, we employ a **Neural Network,** a more advanced method that extends beyond the core class material.
+
+# Data Description
+
+**Source:** The dataset used is the "Shark Tank US dataset," containing detailed information on pitches from the show.
+
+**Key Variables:** The original dataset contained numerous variables. For this analysis, we focused on the most relevant ones, including:
+
+-   **Categorical:** `Startup.Name`, `Industry`, `Pitchers.Gender`, `Pitchers.State`, `Multiple.Entrepreneurs`, `Royalty.Deal`, `Got.Deal` (`Got.Deal` is our primary response variable).
+
+-   **Numerical:** `Original.Ask.Amount`, `Original.Offered.Equity`, `Valuation.Requested`, `Total.Deal.Amount`, `Total.Deal.Equity`, `Deal.Valuation`, `Number.of.Sharks.in.Deal`, `Investment.Amount.Per.Shark`, `Equity.Per.Shark`.
+
+## Data Preprocessing & Cleaning:
+
+We performed the following cleaning steps to prepare the data for analysis:
+
+1.  **Column Selection:** We removed all columns not directly relevant to our research questions, keeping only the 16 key variables listed above.
+
+2.  **Handling Missing Values:** For entries where `Got.Deal` was 0 (no deal), the deal-specific columns (e.g., `Total.Deal.Amount`) contained `NA` values. We imputed these as 0, logically representing that no monetary exchange occurred. The `Royalty.Deal` column was also recoded from a blank string to a categorical "no" or "yes".
+
+```{r}
+# Load packages
+library(caret)
+library(randomForest)
+library(dplyr)
+
+# Load and clean data
+data <- read.csv("/Users/sreepenumuchu/Downloads/Shark Tank US dataset.csv")
+
+# Data Cleaning Steps
+data_clean <- data %>%
+  # Select only the columns we need
+  select(Startup.Name, Industry, Pitchers.Gender, Pitchers.State, Multiple.Entrepreneurs,
+         Original.Ask.Amount, Original.Offered.Equity, Valuation.Requested, Got.Deal, 
+         Total.Deal.Amount, Total.Deal.Equity, Deal.Valuation, Number.of.Sharks.in.Deal, 
+         Investment.Amount.Per.Shark, Equity.Per.Shark, Royalty.Deal) %>%
+  # Handle missing values for deal-related columns when no deal was made
+  mutate(
+    Total.Deal.Amount = ifelse(is.na(Total.Deal.Amount) & Got.Deal == 0, 0, Total.Deal.Amount),
+    Total.Deal.Equity = ifelse(is.na(Total.Deal.Equity) & Got.Deal == 0, 0, Total.Deal.Equity),
+    Deal.Valuation = ifelse(is.na(Deal.Valuation) & Got.Deal == 0, 0, Deal.Valuation),
+    Number.of.Sharks.in.Deal = ifelse(is.na(Number.of.Sharks.in.Deal) & Got.Deal == 0, 0, Number.of.Sharks.in.Deal),
+    Investment.Amount.Per.Shark = ifelse(is.na(Investment.Amount.Per.Shark) & Got.Deal == 0, 0, Investment.Amount.Per.Shark),
+    Equity.Per.Shark = ifelse(is.na(Equity.Per.Shark) & Got.Deal == 0, 0, Equity.Per.Shark),
+    Royalty.Deal = ifelse(is.na(Royalty.Deal) | Royalty.Deal == "", "no", "yes")
+  ) %>%
+  # Remove any remaining rows with NA values
+  na.omit()
+
+# Verify no missing values remain
+print(paste("Remaining rows after cleaning:", nrow(data_clean)))
+print("Missing values per column:")
+print(colSums(is.na(data_clean)))
+```
+
+## Exploratory Data Analysis (EDA):
+
+Our EDA revealed several interesting preliminary trends regarding deal success rates (`Got.Deal`):
+
+-    **Gender:** There was a notable difference in success rates based on the entrepreneurs' gender. Female pitchers secured a deal 63.6% of the time, compared to 58.1% for male pitchers, suggesting a slight advantage for female-led pitches on the show. However, there is a 66.3% success rate for a mixed team which suggests a higher success rate for a mixed pair rather than solo pitchers.
+
+-   **Group Size:** As implied with our findings from the success rates of the genders of the pitchers, the composition of the pitching team has a clear impact. Group pitchers were significantly more successful, securing a deal 68.3% of the time, compared to solo pitchers who had a success rate of 56.1%.
+
+-   **Group Size and Gender Combined:** A more granular view, combining team size and gender, uncovered the most successful demographic. Teams with multiple women were the most successful with a 71.2% chance of securing a deal**,** followed by teams with multiple men, which had a success rate of 68.3%, and teams with a mixed gender have a 67.0% chance of getting a deal. Solo female entrepreneurs had a success rate of 60.0% and solo male entrepreneurs had the lowest success rate among these categories at 53.6%.
+
+-   **State:** The success rate of entrepreneurs varied significantly by their home state, revealing interesting geographic patterns in deal-making on *Shark Tank*.
+
+    -   **Highest Success Rates:**
+
+        -   Utah (UT) leads with 75.0% of pitchers securing deals.
+
+        -   Texas (TX) follows closely at 67.1%.
+
+        -   Georgia (GA) shows strong performance at 64.3%.
+
+        **Moderate Success Rates:**
+
+        -   Several states cluster around 60-62%: California (CA) with 61.9%, Colorado (CO) with 60.0%, Florida (FL) with 61.8%, Illinois (IL) with 60.5%, Ohio (OH) with 60.0%, and Pennsylvania (PA) with 62.5%.
+
+        -   North Carolina sits at 52.4%.
+
+        **Lower Success Rates:**
+
+        -   New York shows 48.4% success
+
+        -   Oregon has the second-lowest rate at 37.5%
+
+        -   Massachusetts has the lowest success rate at 33.3%
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Ensure margin comes from ggplot2
+margin <- ggplot2::margin
+
+# Data preparation
+data <- data %>%
+  mutate(
+    # Gender for plots
+    Pitchers.Gender = case_when(
+      Pitchers.Gender == "Male" ~ "Male",
+      Pitchers.Gender == "Female" ~ "Female",
+      TRUE ~ "Mixed Team"
+    ),
+    
+    # Group size for Plot 2
+    GroupSize = case_when(
+      Multiple.Entrepreneurs == 0 ~ "Solo",
+      Multiple.Entrepreneurs >= 1 ~ "Group",
+      TRUE ~ NA_character_
+    ),
+    
+    # More detailed group size for Plot 3
+    GroupSize2 = case_when(
+      Multiple.Entrepreneurs == 0 ~ "Solo",
+      Multiple.Entrepreneurs >= 1 ~ "Multiple",
+      TRUE ~ NA_character_
+    ),
+    
+    # Combined label
+    Combined = case_when(
+      Pitchers.Gender == "Mixed Team" ~ "Mixed Team",
+      TRUE ~ paste(GroupSize2, Pitchers.Gender)
+    )
+  )
+
+# PLOT 1: Gender
+#| label: fig-gender
+#| fig-width: 8
+#| fig-height: 4
+#| out-width: "100%"
+#| fig-cap: "Percentage of Pitchers Who Got a Deal by Gender"
+plot_gender <- data %>%
+  group_by(Pitchers.Gender) %>%
+  summarise(DealRate = mean(Got.Deal) * 100)
+
+# Set factor order to match your chart
+plot_gender$Pitchers.Gender <- factor(plot_gender$Pitchers.Gender, 
+                                       levels = c("Male", "Female", "Mixed Team"))
+
+ggplot(plot_gender, aes(x = Pitchers.Gender, y = DealRate, fill = Pitchers.Gender)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", DealRate)), vjust = -0.5, size = 6) +
+  scale_y_continuous(limits = c(0, 80), breaks = seq(0, 80, 25), expand = c(0, 0)) +
+  scale_fill_manual(values = c("Male" = "#FF8A80", "Female" = "#00C853", "Mixed Team" = "#6B9CFF")) +
+  labs(
+    title = "Percentage of Pitchers Who Got a Deal by Gender",
+    x = "Pitcher's Gender",
+    y = "Percentage That Got a Deal"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 18, hjust = 0.05),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+# PLOT 2: Group Size
+#| label: fig-group
+#| fig-width: 7
+#| fig-height: 4
+#| out-width: "100%"
+#| fig-cap: "Percentage of Pitchers Who Got a Deal by Group Size"
+plot_group <- data %>%
+  filter(!is.na(GroupSize)) %>%
+  group_by(GroupSize) %>%
+  summarise(DealRate = mean(Got.Deal) * 100)
+
+plot_group$GroupSize <- factor(plot_group$GroupSize, levels = c("Solo", "Group"))
+
+ggplot(plot_group, aes(x = GroupSize, y = DealRate, fill = GroupSize)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", DealRate)), vjust = -0.5, size = 6) +
+  scale_y_continuous(limits = c(0, 80), breaks = seq(0, 80, 25), expand = c(0, 0)) +
+  scale_fill_manual(values = c("Solo" = "#FF8A80", "Group" = "#00CED1")) +
+  labs(
+    title = "Percentage of Pitchers Who Got a Deal by Group Size",
+    x = "Group Size",
+    y = "Percentage That Got a Deal"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 18, hjust = 0.05),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+# PLOT 3: Combined (Group Size + Gender)
+#| label: fig-combined
+#| fig-width: 10
+#| fig-height: 4.5
+#| out-width: "100%"
+#| fig-cap: "Percentage of Pitchers Who Got a Deal by Group Size and Gender"
+plot_combined <- data %>%
+  filter(!is.na(Pitchers.Gender), !is.na(Multiple.Entrepreneurs)) %>%
+  filter(!is.na(Combined)) %>%
+  group_by(Combined) %>%
+  summarise(DealRate = mean(Got.Deal) * 100) %>%
+  filter(Combined %in% c("Solo Male", "Multiple Male", "Solo Female", 
+                         "Multiple Female", "Mixed Team"))
+
+plot_combined$Combined <- factor(plot_combined$Combined, 
+                                  levels = c("Solo Male", "Multiple Male", "Solo Female", 
+                                            "Multiple Female", "Mixed Team"))
+
+ggplot(plot_combined, aes(x = Combined, y = DealRate, fill = Combined)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", DealRate)), vjust = -0.5, size = 6) +
+  scale_y_continuous(limits = c(0, 80), breaks = seq(0, 80, 25), expand = c(0, 0)) +
+  scale_fill_manual(values = c(
+    "Solo Male" = "#FF8A80",
+    "Multiple Male" = "#A4B800",
+    "Solo Female" = "#00C9A7",
+    "Multiple Female" = "#00BFFF",
+    "Mixed Team" = "#E066FF"
+  )) +
+  labs(
+    title = "Percentage of Pitchers Who Got a Deal by Pitcher's Group Size + Gender",
+    x = "Pitcher's Group Size + Gender",
+    y = "Percentage That Got a Deal"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "none",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 18, hjust = 0.05),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+# PLOT 4: By State (20+ data points only)
+#| label: fig-state
+#| fig-width: 9
+#| fig-height: 4.5
+#| out-width: "100%"
+#| fig-cap: "Percentage of Pitchers Who Got a Deal by State"
+plot_state <- data %>%
+  filter(!is.na(Pitchers.State), Pitchers.State != "") %>%
+  group_by(Pitchers.State) %>%
+  summarise(
+    Count = n(),
+    DealRate = mean(Got.Deal) * 100
+  ) %>%
+  filter(Count >= 20)
+
+# Order states alphabetically
+plot_state$Pitchers.State <- factor(plot_state$Pitchers.State)
+
+ggplot(plot_state, aes(x = Pitchers.State, y = DealRate, fill = Pitchers.State)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", DealRate)), vjust = -0.5, size = 5) +
+  scale_y_continuous(limits = c(0, 80), breaks = seq(0, 80, 25), expand = c(0, 0)) +
+  labs(
+    title = "Percentage of Pitchers Who Got a Deal by State",
+    subtitle = "I only included states that had 20+ data points:",
+    x = "Pitcher's State",
+    y = "Percentage That Got a Deal"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "none",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 18, hjust = 0.05),
+    plot.subtitle = element_text(size = 14, hjust = 0.05),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+```
+
+# Methodology
+
+We employed two distinct statistical learning methods to address our research questions, each chosen for its specific strengths in handling different aspects of our predictive modeling tasks.
+
+## a) Random Forest: A Comprehensive Predictive Model 
+
+To answer the board question of *"Can we predict whether a pitch will receive a deal or not using other variables in the dataset?"* we implemented a Random Forest classifier. This method operates by constructing a multitude of decision trees during training and outputting the mode of the classes of the individual trees. We selected this method for several key reasons:
+
+-   It is highly robust to outliers and non-linear relationships, which are common in real-world business data like ours.
+
+-   It seamlessly accommodates our mix of numerical and categorical predictors.
+
+-   A critical feature for our analysis is its ability to provide a ranked list of variable importance, allowing us to interpret which factors are the most influential drivers of a deal's success.
+
+-   By aggregating predictions from many trees, the model reduces the variance and overfitting often associating with a single, complex decision tree.
+
+**Implementation:**
+
+The implementation of the Random Forest model followed a structured pipeline using R:
+
+1.  **Data Cleaning and Partitioning:** The dataset was thoroughly cleaned to handle missing values, particularly in deal-related columns for pitches that did not receive a deal, which were imputed with zeros. The data was then split into a training set (80%) and a testing set (20%) using the `createDataPartition` function from the `caret` package, preserving the distribution of the `Got.Deal` outcome. A fixed random seed (`set.seed(380)`) was used for reproducibility.
+2.  **Feature Selection:** The `Startup.Name` column was removed as a unique identifier with no predictive value. The `Multiple.Entrepreneurs` column was also excluded as it was redundant with other variables.
+3.  **Model Training:** The model was trained using the `randomForest` package with the following hyperparameters:
+    -   `ntree = 500`: To ensure model stability and convergence.
+
+    -   `mtry = 3`: The number of variables randomly sampled at each split (default for classification).
+
+    -   `importance = TRUE`: To calculate and store the metrics needed for variable importance analysis.
+4.  **Performance Evaluation:** The model's performance was assessed on the unseen test data by generating a confusion matrix and calculating overall accuracy.
+
+## b) Neural Network: Modeling the Nuance of Equity Offers
+
+To specifically answer the question, *"How likely are the contestants to get a deal based on the original equity offered to the sharks?"* we employed a Neural Network (NN). This method extends beyond the core class material and was selected for its unique capabilities:
+
+-   Neural networks can learn highly complex, non-linear relationships. We hypothesized that the link between equity offered and deal success is not a simple straight line but may have thresholds or an optimal "sweet spot."
+
+-   The model naturally outputs a probability, providing a direct and interpretable answer to our research question about "likelihood."
+
+**Implementation:**
+
+\[add info\]
+
+# Data Analysis Results
+
+## Random Forest Model Performance and Interpretation
+
+The Random Forest model demonstrated exceptional performance in predicting deal outcomes:
+
+The model achieved perfect classification on the test set. While this level of accuracy is unusually high and will be critically examined, it indicates the model's powerful capability to distinguish between successful and unsuccessful pitches within this dataset.
+
+**Variable Importance Analysis**
+
+The variable importance measures reveal crucial insights into what drives deal success on Shark Tank.
+
+**Top 5 Most Important Variables by Mean Decrease in Accuracy:**
+
+1.  Total.Deal.Amount (14.63)
+
+2.  Number.of.Sharks.in.Deal (14.04)
+
+3.  Investment.Amount.Per.Shark (13.91)
+
+4.  Total.Deal.Equity (8.78)
+
+5.  Equity.Per.Shark (8.32)
+
+**Interpretation of Key Findings:**
+
+1.  **Deal Structure Dominates Prediction:** The most critical finding is that all top 5 predictive variables are direct consequences of a deal being made rather than predictors available before the pitch. This creates a near-deterministic relationship: if `Got.Deal = 0`, then `Total.Deal.Amount = 0`, and if `Got.Deal = 1`, these variables have positive values. This explains the perfect accuracy but highlights a fundamental data leakage issue.
+
+2.  **Financial Terms are Paramount:** The actual monetary amounts (`Total.Deal.Amount`, `Investment.Amount.Per.Shark`) are more important than equity percentages, suggesting the Sharks prioritize the absolute dollar value of investments.
+
+3.  **Shark Participation Matters:** `Number.of.Sharks.in.Deal` is highly important, indicating that deals with multiple Sharks are a strong, identifiable signal of success.
+
+4.  **Pre-Deal Factors Show Limited Predictive Power:** Variables known before the negotiation, such as `Original.Offered.Equity` (1.68), `Pitchers.State` (1.00), and `Industry` (0.06), had significantly lower importance. The negative importance for `Pitchers.Gender` (-1.42) suggests it provides no meaningful predictive signal and may slightly degrade the model's performance.
+
+```{r}
+# Load packages
+library(caret)
+library(randomForest)
+
+# Train/test split
+set.seed(380) # for reproducibility
+train_idx <- createDataPartition(data_clean$Got.Deal, p=0.8, list=F)
+train_data <- data_clean[train_idx, ]
+# Remove Startup.Name as it's an identifier, not a feature
+train_data$Startup.Name <- NULL
+train_data$Multiple.Entrepreneurs <- NULL
+test_data <- data_clean[-train_idx, ]
+
+# Fit RF Model
+rf <- randomForest(as.factor(Got.Deal) ~., data=train_data, ntree=500, mtry=3, importance=TRUE)
+
+# Prediction on test data
+pred_prob <- predict(rf, newdata=test_data, type="prob") # predicted probabilities
+pred_surv <- predict(rf, newdata=test_data, type="response") # predicted class
+
+# Remove Startup.Name from test data for evaluation
+test_data_eval <- test_data
+test_data_eval$Startup.Name <- NULL
+test_data_eval$Multiple.Entrepreneurs <- NULL
+
+table(pred_surv, test_data_eval$Got.Deal) # confusion matrix
+mean(pred_surv == test_data_eval$Got.Deal) # accuracy
+
+# Variable Importance
+varImpPlot(rf, n.var=5, main="Variable Importance") # Importance Plot 
+importance(rf)
+```
+
+## Neural Network Model Results
+
+\[add info\]
+
+# Conclusion
+
+**Key Takeaways:**\
+Our analysis successfully built a highly accurate predictive model for deal success on *Shark Tank*. The most significant finding from the Random Forest model is that the final terms of the deal itself are the ultimate determinants of the binary `Got.Deal` outcome. While EDA showed interesting variations by gender and state, these demographic factors were not primary drivers in the final predictive model compared to the financial and structural details of the deal. The Neural Network analysis aims to provide a more nuanced, strategic insight into how initial negotiation terms influence success.
+
+**Future Directions for Predictive Modeling:**\
+The current model serves as a perfect benchmark for understanding the outcomes. The logical next step is to build a more practical, predictive model that uses only information available *before* a pitch concludes. This would isolate the signals accessible to entrepreneurs beforehand, such as `Original.Ask.Amount`, `Industry`, and `Pitchers.State`, providing a truly predictive tool for future contestants.
+
+**Other Limitations:**
+
+-   **Contextual Nuance:** Neither model can capture the persuasive power of the pitch or the negotiation dynamics, which are critical elements of the show.
