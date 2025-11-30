@@ -1,25 +1,31 @@
 **Shark Tank Deal Prediction Analysis**
+
 A statistical analysis project using machine learning to predict deal outcomes on the TV show Shark Tank and identify optimal equity offers for entrepreneurs.
 
 **Project Overview**
+
 This project analyzes data from the reality TV show Shark Tank to answer two key questions:
 
 Can we predict whether a pitch will receive a deal? Using Random Forest classification to identify key success factors.
 What equity offer maximizes deal probability? Using Generalized Additive Models (GAM) to find the optimal "sweet spot."
 
 **Key Findings**
+
 Optimal Equity Range: Offering 20-25% equity maximizes deal probability (~60-65% success rate)
 Team Composition Matters: Multiple female entrepreneurs had the highest success rate (71.2%)
 Top Predictors: Deal amount, number of sharks involved, and investment per shark are the strongest indicators
 Geographic Trends: Utah (75%), Texas (67.1%), and Georgia (64.3%) had the highest success rates
 
 **Dataset**
+
 Source: Shark Tank US dataset containing detailed pitch and investment information
 **Key Variables:**
+
 Categorical: Industry, Gender, State, Royalty Deal, Deal Status
 Numerical: Ask Amount, Equity Offered, Valuation, Deal Terms, Number of Sharks
 
 **Methodology**
+
 Random Forest Model
 Purpose: Comprehensive prediction of deal outcomes
 Performance: Achieved perfect classification on test set (100% accuracy)
