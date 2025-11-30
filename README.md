@@ -27,23 +27,28 @@ Numerical: Ask Amount, Equity Offered, Valuation, Deal Terms, Number of Sharks
 **Methodology**
 
 Random Forest Model
+
 Purpose: Comprehensive prediction of deal outcomes
 Performance: Achieved perfect classification on test set (100% accuracy)
 Implementation: 500 trees, 80/20 train-test split
 
 Generalized Additive Model (GAM)
+
 Purpose: Model non-linear relationship between equity and deal probability
 Key Insight: Reveals optimal equity range using smooth splines
 Controls: Ask amount, valuation, industry, gender, team size
 
 **Results Summary**
+
 Success Rates by Demographics
+
 Female pitchers: 63.6%
 Male pitchers: 58.1%
 Mixed teams: 66.4%
 Group pitches: 68.3% vs Solo: 56.1%
 
 Variable Importance (Random Forest)
+
 Total Deal Amount (14.63)
 Number of Sharks in Deal (14.04)
 Investment Amount Per Shark (13.91)
@@ -51,6 +56,7 @@ Total Deal Equity (8.78)
 Equity Per Shark (8.32)
 
 **Getting Started**
+
 Prerequisites
 rinstall.packages(c("caret", "randomForest", "dplyr", "mgcv", "ggplot2", "tidyverse"))
 Running the Analysis
@@ -75,6 +81,7 @@ source("random_forest_model.R")
 source("gam_model.R")
 
 **Visualizations**
+
 The project includes several key visualizations:
 
 Deal success rates by gender and team composition
@@ -97,17 +104,20 @@ Random Forest: ntree=500, mtry=3, importance=TRUE
 GAM: Binomial family with logit link, smooth term for equity
 
 **Limitations**
+
 Cannot capture qualitative factors (presentation skills, negotiation dynamics)
 Perfect accuracy suggests potential data leakage from using post-deal variables
 Results specific to Shark Tank context
 
 **Future Directions**
+
 Build pre-pitch prediction model using only available information
 Incorporate sentiment analysis from pitch transcripts
 Cross-validation with other entrepreneurship datasets
 Time-series analysis of deal trends across seasons
 
 **Contributors**
+
 Mitchell Darling: Data cleaning and EDA
 Shania King: Random Forest implementation
 Siyona Behera: GAM development
